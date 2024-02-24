@@ -1073,10 +1073,8 @@ bool EQMod::ReadScopeStatus()
                     // Start slewing
                     LOGF_INFO("Motors while parking stopped, reparking mount: RA increment = %d, DE increment = %d",
                             static_cast<int32_t>(parkRAEncoder - currentRAEncoder), static_cast<int32_t>(parkDEEncoder - currentDEEncoder));
-                    mount->SlewTo(static_cast<int32_t>(parkRAEncoder - currentRAEncoder),
-                                static_cast<int32_t>(parkDEEncoder - currentDEEncoder));
-
-                    TrackState = SCOPE_PARKING;
+                    TrackState = SCOPE_IDLE;
+                    SetParked(false);
                 }
                 else {
                     SetParked(true);
