@@ -127,6 +127,20 @@ class ASIBase : public INDI::CCD
         /** Control cooler */
         bool activateCooler(bool enable);
 
+        /**
+         * Warm-up-on-cooler-off: when the user switches the cooler off with a temperature
+         * ramp configured (TemperatureRampNP), we don't cut TEC power immediately -- we ramp
+         * the setpoint up toward ambient using the same generic INDI::CCD ramp/stabilization
+         * machinery that already drives cooling, and only cut real TEC power once that ramp
+         * reports completion (target reached, or temperature stabilized because ambient is
+         * below the warm-up target). This avoids the thermal shock of an abrupt hard cutoff.
+         */
+        bool mCoolerWarmingUp {false};
+        double mSavedCoolingTarget {0};
+        void beginCoolerWarmup();
+        void cancelCoolerWarmup();
+        void resumeCoolingAfterWarmup();
+
         /** Set Video Format */
         bool setVideoFormat(uint8_t index);
 
