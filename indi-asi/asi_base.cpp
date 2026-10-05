@@ -1151,6 +1151,8 @@ void ASIBase::beginCoolerWarmup()
 {
     mSavedCoolingTarget = m_TargetTemperature;
     mCoolerWarmingUp = true;
+    mWarmupLastTemperature = mCurrentTemperature;
+    mWarmupStableTimer.start();
 
     m_TargetTemperature = WARMUP_TARGET_TEMPERATURE;
     m_InitialRampTemperature = TemperatureNP[0].getValue();
@@ -1484,14 +1486,39 @@ void ASIBase::temperatureTimerTimeout()
         TemperatureNP.apply();
     }
 
-    if (mCoolerWarmingUp && TemperatureNP.getState() == IPS_OK)
+    if (mCoolerWarmingUp)
     {
-        // Base-class ramp/stabilization detection concluded the warm-up (either the ambient
-        // target was reached, or the temperature stopped changing because ambient is below
-        // WARMUP_TARGET_TEMPERATURE) -- now it's safe to actually cut TEC power.
-        mCoolerWarmingUp = false;
-        LOG_INFO("Cooler is now off, temperature has stabilized.");
-        activateCooler(false);
+        // Don't rely on INDI::CCD's own stabilization detection in checkTemperatureTarget():
+        // its elapsed-timer gate is reset by every ramp step and so never opens, meaning
+        // TemperatureNP never reaches IPS_OK and we'd keep "warming up" forever. Detect
+        // completion ourselves from the real measured temperature instead -- either the
+        // warm-up target was essentially reached, or it has stopped changing (ambient is
+        // below WARMUP_TARGET_TEMPERATURE).
+        bool warmupDone = false;
+
+        if (mCurrentTemperature >= WARMUP_TARGET_TEMPERATURE - TEMP_THRESHOLD)
+        {
+            warmupDone = true;
+        }
+        else if (std::abs(mCurrentTemperature - mWarmupLastTemperature) > 0.5)
+        {
+            mWarmupLastTemperature = mCurrentTemperature;
+            mWarmupStableTimer.start();
+        }
+        else if (mWarmupStableTimer.elapsed() >= 60000)
+        {
+            warmupDone = true;
+        }
+
+        if (warmupDone)
+        {
+            mCoolerWarmingUp = false;
+            m_TemperatureCheckTimer.stop();
+            TemperatureNP.setState(IPS_OK);
+            TemperatureNP.apply();
+            LOGF_INFO("Cooler is now off, temperature stabilized at %.2f C.", mCurrentTemperature);
+            activateCooler(false);
+        }
     }
 
     if (HasCooler())

@@ -34,6 +34,7 @@
 
 #include <indiccd.h>
 #include <inditimer.h>
+#include <indielapsedtimer.h>
 
 class SingleWorker;
 class ASIBase : public INDI::CCD
@@ -130,13 +131,16 @@ class ASIBase : public INDI::CCD
         /**
          * Warm-up-on-cooler-off: when the user switches the cooler off with a temperature
          * ramp configured (TemperatureRampNP), we don't cut TEC power immediately -- we ramp
-         * the setpoint up toward ambient using the same generic INDI::CCD ramp/stabilization
-         * machinery that already drives cooling, and only cut real TEC power once that ramp
-         * reports completion (target reached, or temperature stabilized because ambient is
-         * below the warm-up target). This avoids the thermal shock of an abrupt hard cutoff.
+         * the setpoint up toward ambient using the same generic INDI::CCD ramp machinery that
+         * already drives cooling. Completion is detected locally (not via INDI::CCD's own
+         * stabilization logic in checkTemperatureTarget(), which never fires here: its
+         * elapsed-timer gate gets reset by every ramp step and so never opens) by watching the
+         * real measured temperature for a plateau, mirroring what ccd_simulator.cpp does.
          */
         bool mCoolerWarmingUp {false};
         double mSavedCoolingTarget {0};
+        double mWarmupLastTemperature {0};
+        INDI::ElapsedTimer mWarmupStableTimer;
         void beginCoolerWarmup();
         void cancelCoolerWarmup();
         void resumeCoolingAfterWarmup();
